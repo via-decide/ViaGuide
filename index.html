@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <title>ViaDecide Step Engine — PDF/Text → Guided Steps → Progress PDF</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800;900&family=Space+Mono:wght@400;700&family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#050a12;
+      --card:#0b1422;
+      --card2:#09101b;
+      --border:rgba(255,255,255,.10);
+      --text:#e9eef7;
+      --muted:#9ab0c9;
+      --mono:'Space Mono', monospace;
+      --display:'Syne', sans-serif;
+      --body:'Noto Sans', sans-serif;
+      --saffron:#FF9933;
+      --white:#ffffff;
+      --green:#138808;
+      --chakra:#000080;
+      --ok:#00d68f;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+      --shadow:0 10px 30px rgba(0,0,0,.45);
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--body);
+      background:
+        radial-gradient(1100px 600px at 10% 10%, rgba(255,153,51,.10), transparent 55%),
+        radial-gradient(900px 600px at 90% 0%, rgba(0,214,143,.08), transparent 60%),
+        radial-gradient(700px 600px at 50% 100%, rgba(59,130,246,.06), transparent 60%),
+        var(--bg);
+      color:var(--text);
+      overflow-x:hidden;
+    }
+    .tricolor{
+      position:fixed; inset:0 0 auto 0; height:4px; z-index:999;
+      background:linear-gradient(90deg,var(--saffron) 33.33%, var(--white) 33.33%, var(--white) 66.66%, var(--green) 66.66%);
+    }
+    .wrap{
+      max-width:1100px;
+      margin:0 auto;
+      padding:20px 16px 80px;
+      padding-top:18px;
+    }
+    header{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:14px;
+      margin-top:10px;
+    }
+    .brand{
+      display:flex; flex-direction:column; gap:6px;
+    }
+    .logo{
+      font-family:var(--display);
+      font-weight:900;
+      letter-spacing:-.04em;
+      font-size:clamp(1.4rem, 3.5vw, 2rem);
+      line-height:1;
+      user-select:none;
+    }
+    .logo .via{color:var(--saffron)}
+    .logo .decide{color:var(--white)}
+    .tag{
+      font-family:var(--mono);
+      font-size:.62rem;
+      letter-spacing:2px;
+      text-transform:uppercase;
+      color:var(--muted);
+    }
+    .top-actions{
+      display:flex; gap:10px; flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .pill{
+      font-family:var(--mono);
+      font-size:.58rem;
+      letter-spacing:1.4px;
+      text-transform:uppercase;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+      color:rgba(255,255,255,.85);
+      user-select:none;
+    }
+    .pill.india{border-color:rgba(255,153,51,.35); color:var(--saffron)}
+    .pill.ok{border-color:rgba(0,214,143,.35); color:var(--ok)}
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:14px;
+      margin-top:18px;
+    }
+    @media (min-width: 980px){
+      .grid{grid-template-columns: 420px 1fr}
+    }
+
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:14px;
+    }
+    .card h2{
+      margin:0 0 8px;
+      font-family:var(--display);
+      font-weight:900;
+      letter-spacing:-.02em;
+      font-size:1.05rem;
+      color:var(--white);
+    }
+    .sub{
+      margin:0 0 12px;
+      color:var(--muted);
+      font-size:.9rem;
+      line-height:1.6;
+    }
+    .row{display:flex; gap:10px; flex-wrap:wrap}
+    .btn{
+      appearance:none;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+      color:var(--text);
+      border-radius:12px;
+      padding:12px 12px;
+      cursor:pointer;
+      font-family:var(--display);
+      font-weight:800;
+      letter-spacing:.4px;
+      font-size:.82rem;
+      transition:transform .06s ease, opacity .15s ease, border-color .15s ease;
+      width:100%;
+    }
+    .btn:active{transform:scale(.99); opacity:.9}
+    .btn.saffron{border-color:rgba(255,153,51,.45); background:rgba(255,153,51,.10); color:var(--saffron)}
+    .btn.green{border-color:rgba(0,214,143,.40); background:rgba(0,214,143,.10); color:var(--ok)}
+    .btn.blue{border-color:rgba(59,130,246,.40); background:rgba(59,130,246,.10); color:#93c5fd}
+    .btn.red{border-color:rgba(239,68,68,.40); background:rgba(239,68,68,.10); color:#fca5a5}
+    .btn.gray{background:rgba(255,255,255,.02); color:var(--muted)}
+    .btn.inline{width:auto; padding:10px 12px; border-radius:10px}
+
+    .field{
+      width:100%;
+      background:var(--card2);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px 12px;
+      color:var(--text);
+      font-family:var(--body);
+      outline:none;
+      transition:border-color .15s ease;
+    }
+    .field:focus{border-color:rgba(255,153,51,.45)}
+    textarea.field{min-height:120px; resize:vertical; line-height:1.65}
+
+    .label{
+      font-family:var(--mono);
+      font-size:.58rem;
+      letter-spacing:1.6px;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.62);
+      margin:10px 0 6px;
+    }
+
+    .tiny{
+      font-family:var(--mono);
+      font-size:.62rem;
+      color:rgba(255,255,255,.55);
+      line-height:1.55;
+    }
+
+    .progress{
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      margin-top:10px;
+    }
+    .bar{
+      flex:1;
+      height:10px;
+      border-radius:999px;
+      background:rgba(255,255,255,.06);
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.08);
+    }
+    .fill{
+      height:100%;
+      width:0%;
+      background:linear-gradient(90deg, var(--saffron), var(--ok));
+      border-radius:999px;
+      transition:width .25s ease;
+    }
+    .stat{
+      font-family:var(--mono);
+      font-size:.6rem;
+      letter-spacing:1.2px;
+      color:rgba(255,255,255,.7);
+      text-transform:uppercase;
+    }
+
+    .step{
+      border:1px solid rgba(255,255,255,.09);
+      border-radius:16px;
+      background:rgba(0,0,0,.22);
+      padding:14px;
+    }
+    .stepHeader{
+      display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+    }
+    .stepTitle{
+      margin:0;
+      font-family:var(--display);
+      font-weight:900;
+      letter-spacing:-.02em;
+      font-size:1.05rem;
+      color:var(--saffron);
+      line-height:1.15;
+    }
+    .stepMeta{
+      display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;
+    }
+    .chip{
+      font-family:var(--mono);
+      font-size:.55rem;
+      letter-spacing:1.3px;
+      text-transform:uppercase;
+      padding:5px 9px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+      color:rgba(255,255,255,.75);
+      user-select:none;
+    }
+    .chip.active{border-color:rgba(255,153,51,.35); color:var(--saffron)}
+    .chip.done{border-color:rgba(0,214,143,.35); color:var(--ok)}
+    .chip.locked{opacity:.55}
+
+    .stepBody{margin-top:10px}
+    .block{
+      background:rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      padding:12px;
+      margin-top:10px;
+    }
+    .block h3{
+      margin:0 0 6px;
+      font-family:var(--mono);
+      font-size:.62rem;
+      letter-spacing:2px;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.70);
+    }
+    .block p{margin:0; color:rgba(255,255,255,.82); font-size:.92rem; line-height:1.7}
+    .rubric{
+      margin:0;
+      padding-left:18px;
+      color:rgba(255,255,255,.78);
+      font-size:.9rem;
+      line-height:1.7;
+    }
+    .rubric li{margin:6px 0}
+    .hint{color:rgba(255,255,255,.68); font-size:.88rem; line-height:1.65}
+
+    .toast{
+      position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
+      background:rgba(10,18,30,.92);
+      border:1px solid rgba(0,214,143,.35);
+      color:var(--ok);
+      padding:10px 14px;
+      border-radius:999px;
+      font-family:var(--mono);
+      font-size:.62rem;
+      letter-spacing:1.2px;
+      text-transform:uppercase;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .18s ease;
+      z-index:9999;
+      max-width:92vw;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .toast.show{opacity:1}
+
+    /* Print/PDF helper panel (offscreen) */
+    #pdf-root{
+      position:fixed;
+      left:-99999px;
+      top:0;
+      width:794px; /* A4 px-ish */
+      background:#ffffff;
+      color:#111827;
+      font-family:'Noto Sans', sans-serif;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="tricolor"></div>
+
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo"><span class="via">via</span><span class="decide">decide</span><span style="color:rgba(255,255,255,.75)"> Step Engine</span></div>
+        <div class="tag">PDF / Text → Steps → Gated Progress → Progress PDF</div>
+      </div>
+      <div class="top-actions">
+        <span class="pill india">🇮🇳 IndiaAI-aligned</span>
+        <span class="pill ok" id="saveStatePill">autosave: on</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- LEFT: ingest + settings -->
+      <section class="card">
+        <h2>1) Add your material</h2>
+        <p class="sub">Upload a PDF (book chapter, SOP, manual) or paste text/notes. This tool will extract a step-by-step plan and gate progress until your answer meets the rubric.</p>
+
+        <div class="label">Goal</div>
+        <input id="goal" class="field" placeholder="e.g., Learn this chapter in 7 days & apply it to my project" />
+
+        <div class="label">Mode</div>
+        <select id="mode" class="field">
+          <option value="learn">Learn (master concepts)</option>
+          <option value="apply">Apply (build/do something)</option>
+          <option value="exam">Exam (assessment-driven)</option>
+        </select>
+
+        <div class="label">Pace</div>
+        <select id="pace" class="field">
+          <option value="7">7 days</option>
+          <option value="14" selected>14 days</option>
+          <option value="30">30 days</option>
+        </select>
+
+        <div class="label">PDF upload</div>
+        <input id="pdfFile" class="field" type="file" accept="application/pdf" />
+
+        <div class="label">Or paste text / Gemini summary</div>
+        <textarea id="pasteText" class="field" placeholder="Paste notes or summary here…"></textarea>
+
+        <div class="row" style="margin-top:10px">
+          <button class="btn saffron" id="btnGenerate">Generate Steps</button>
+          <button class="btn gray" id="btnClear">Clear</button>
+        </div>
+
+        <div class="label">Quality gate</div>
+        <div class="block">
+          <div class="row" style="align-items:center; justify-content:space-between">
+            <div class="tiny">
+              <strong>Auto-eval:</strong> requires minimum length + keyword overlap + clear structure.<br>
+              You can also enable manual override for faster testing.
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px; align-items:center; justify-content:space-between">
+            <label class="tiny" style="display:flex; gap:10px; align-items:center; cursor:pointer;">
+              <input type="checkbox" id="manualOverride" />
+              Manual approve steps (override)
+            </label>
+            <label class="tiny" style="display:flex; gap:10px; align-items:center; cursor:pointer;">
+              <input type="checkbox" id="showSources" checked />
+              Show source anchors
+            </label>
+          </div>
+        </div>
+
+        <h2 style="margin-top:14px">2) Export</h2>
+        <p class="sub">Export a tricolor-branded progress brief or completion brief.</p>
+
+        <div class="row">
+          <button class="btn green" id="btnExportProgress">Export Progress PDF</button>
+          <button class="btn blue" id="btnExportComplete">Export Completion PDF</button>
+        </div>
+
+        <div class="label">Storage</div>
+        <div class="block">
+          <div class="tiny" id="storageMeta">No project loaded.</div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn inline gray" id="btnSave">Save</button>
+            <button class="btn inline gray" id="btnLoad">Load</button>
+            <button class="btn inline red" id="btnWipe">Wipe</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: steps runner -->
+      <section class="card">
+        <h2>Step Runner</h2>
+        <p class="sub">Answer the current step. If your response meets the rubric, the next step unlocks.</p>
+
+        <div class="progress">
+          <div class="bar"><div class="fill" id="progressFill"></div></div>
+          <div class="stat" id="progressStat">0 / 0 completed</div>
+        </div>
+
+        <div id="stepsRoot" style="margin-top:14px"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div id="pdf-root" aria-hidden="true"></div>
+
+  <script>
+    /*****************************************************************
+     * ViaDecide Step Engine (client-only)
+     * - PDF upload via pdf.js -> text extraction with page anchors
+     * - Or paste text
+     * - Step generation using lightweight heuristics (no LLM)
+     * - Gated progression with rubric-based auto-eval or manual override
+     * - Progress/Completion PDF export using jsPDF
+     * - Save/Load in localStorage
+     *****************************************************************/
+
+    // pdf.js worker
+    if (window["pdfjsLib"]) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    }
+
+    const $ = (id) => document.getElementById(id);
+
+    const STORAGE_KEY = "viadecide_step_engine_v1";
+
+    let STATE = {
+      projectId: null,
+      createdAt: null,
+      updatedAt: null,
+      goal: "",
+      mode: "learn",
+      paceDays: 14,
+      source: {
+        type: "none", // pdf|text
+        name: "",
+        pages: 0,
+        anchors: [] // [{page, text}]
+      },
+      rawText: "",
+      steps: [], // generated step objects
+      activeStepIndex: 0
+    };
+
+    // -------------------- Utilities --------------------
+    function toast(msg, ok=true){
+      const el = $("toast");
+      el.style.borderColor = ok ? "rgba(0,214,143,.35)" : "rgba(239,68,68,.35)";
+      el.style.color = ok ? "var(--ok)" : "#fca5a5";
+      el.textContent = msg;
+      el.classList.add("show");
+      setTimeout(()=>el.classList.remove("show"), 2200);
+    }
+    function nowISO(){ return new Date().toISOString(); }
+    function uid(){ return "p_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16); }
+
+    function normalizeText(t){
+      return (t||"")
+        .replace(/\u00AD/g,"")
+        .replace(/[ \t]+/g," ")
+        .replace(/\n{3,}/g,"\n\n")
+        .trim();
+    }
+
+    function splitSentences(text){
+      const t = normalizeText(text);
+      if (!t) return [];
+      // safe-ish splitter
+      return t
+        .replace(/\r/g,"")
+        .split(/(?<=[.!?])\s+(?=[A-Z0-9(\u201C"])/g)
+        .map(s=>s.trim())
+        .filter(Boolean);
+    }
+
+    function tokenize(text){
+      return normalizeText(text)
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g," ")
+        .split(/\s+/)
+        .filter(w=>w.length>=4);
+    }
+
+    function topKeywords(text, limit=8){
+      const stop = new Set(["this","that","with","from","your","have","will","into","they","them","then","than","when","where","what","which","about","because","while","there","their","these","those","could","should","would","also","more","most","some","such","many","much","very","over","under","between","within","without","before","after","being","been","into","onto","does","doing","done"]);
+      const freq = new Map();
+      for (const w of tokenize(text)){
+        if (stop.has(w)) continue;
+        freq.set(w, (freq.get(w)||0) + 1);
+      }
+      return [...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,limit).map(x=>x[0]);
+    }
+
+    function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+    function updateStorageMeta(){
+      $("storageMeta").textContent = STATE.projectId
+        ? `Project: ${STATE.projectId} • Updated: ${(STATE.updatedAt||"").slice(0,19).replace("T"," ")}`
+        : "No project loaded.";
+    }
+
+    function autosave(){
+      STATE.updatedAt = nowISO();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+      updateStorageMeta();
+    }
+
+    function loadSaved(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        const s = JSON.parse(raw);
+        STATE = s;
+        // hydrate UI
+        $("goal").value = STATE.goal || "";
+        $("mode").value = STATE.mode || "learn";
+        $("pace").value = String(STATE.paceDays || 14);
+        $("pasteText").value = STATE.source?.type === "text" ? (STATE.rawText||"") : $("pasteText").value;
+        renderSteps();
+        updateProgressUI();
+        updateStorageMeta();
+        return true;
+      }catch(e){
+        console.warn(e);
+        return false;
+      }
+    }
+
+    function wipeSaved(){
+      localStorage.removeItem(STORAGE_KEY);
+      toast("Saved project wiped");
+      STATE.projectId = null;
+      STATE.createdAt = null;
+      STATE.updatedAt = null;
+      updateStorageMeta();
+    }
+
+    // -------------------- PDF extraction --------------------
+    async function extractTextFromPDF(file){
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const numPages = pdf.numPages;
+
+      let full = "";
+      const anchors = [];
+
+      for (let p=1; p<=numPages; p++){
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        const strings = content.items.map(it => it.str).filter(Boolean);
+        const pageText = normalizeText(strings.join(" "));
+        if (pageText){
+          anchors.push({ page: p, text: pageText.slice(0, 8000) }); // cap per page
+          full += `\n\n[Page ${p}]\n` + pageText;
+        }
+      }
+
+      return {
+        text: normalizeText(full),
+        pages: numPages,
+        anchors
+      };
+    }
+
+    // -------------------- Step generation (heuristic) --------------------
+    function generateStepsFromText(rawText, anchors, opts){
+      const text = normalizeText(rawText);
+      const sentences = splitSentences(text);
+
+      // Try heading detection (common in PDFs)
+      const lines = text.split("\n").map(l=>l.trim()).filter(Boolean);
+      const headings = [];
+      for (const l of lines){
+        // Heuristic: short lines in Title Case / ALL CAPS
+        const isShort = l.length >= 6 && l.length <= 70;
+        const capsRatio = (l.replace(/[^A-Z]/g,"").length / Math.max(1,l.replace(/[^a-zA-Z]/g,"").length));
+        const looksLikeHeading = isShort && (capsRatio > 0.6 || /^[A-Z][A-Za-z0-9 :\-–—]+$/.test(l));
+        if (looksLikeHeading && !l.startsWith("[Page")){
+          headings.push(l);
+        }
+        if (headings.length >= 8) break;
+      }
+
+      // Build modules: either by headings, or chunks of sentences
+      let modules = [];
+      if (headings.length >= 2){
+        // Create modules around headings by scanning text segments (simple)
+        // We'll use headings as titles, and allocate equal-sized sentence windows.
+        const n = clamp(headings.length, 2, 8);
+        const per = Math.max(8, Math.floor(sentences.length / n));
+        for (let i=0;i<n;i++){
+          const start = i*per;
+          const chunk = sentences.slice(start, start+per).join(" ");
+          modules.push({ title: headings[i], body: chunk || sentences.slice(start, start+per).join(" ") });
+        }
+      } else {
+        // Chunk into 6–10 modules based on length
+        const n = clamp(Math.round(sentences.length / 14), 4, 10);
+        const per = Math.max(10, Math.floor(sentences.length / n));
+        for (let i=0;i<n;i++){
+          const start = i*per;
+          const chunk = sentences.slice(start, start+per).join(" ");
+          modules.push({ title: `Module ${i+1}`, body: chunk });
+        }
+      }
+
+      const mode = opts.mode;
+      const paceDays = opts.paceDays;
+
+      // Steps: 1 step per module + an initial setup + a final synthesis step
+      const steps = [];
+
+      steps.push(makeStep({
+        index: 0,
+        title: "Setup: Define your target outcome",
+        objective: "Clarify what success looks like so every step stays execution-oriented.",
+        task: mode === "apply"
+          ? "Write a 5–8 line outcome statement: what you will build/do, for whom, and by when."
+          : "Write a 5–8 line learning goal: what you want to understand, retain, and be able to explain.",
+        check: "In 2–3 sentences, what will you be able to do at the end?",
+        rubric: [
+          "Includes a clear outcome (not just a topic).",
+          "Includes a timebox (e.g., 7/14/30 days).",
+          "Mentions how you will validate success (metric or demonstration)."
+        ],
+        hints: [
+          "Use: 'By Day X, I will…' + 'Success is…' + 'I will validate by…'"
+        ],
+        sourceAnchors: anchors && anchors.length ? [`Derived from your provided material (total pages: ${opts.pages||"?"}).`] : []
+      }));
+
+      modules.forEach((m, i) => {
+        const kws = topKeywords(m.body, 8);
+        const stepNum = i + 1;
+        const title = m.title || `Module ${stepNum}`;
+        const obj = mode === "exam"
+          ? "Extract testable knowledge: definitions, claims, and distinctions."
+          : mode === "apply"
+            ? "Convert the module into an action-ready mini-playbook."
+            : "Build understanding by summarizing, explaining, and recalling key ideas.";
+
+        const task = mode === "exam"
+          ? "List 8–12 bullet facts: definitions, formulas, or claims. Then write 3 likely exam questions."
+          : mode === "apply"
+            ? "Write a mini playbook: (a) what to do, (b) why it works, (c) constraints, (d) example."
+            : "Write a 'teach-back' summary (8–12 bullets) + 3 examples in your own words.";
+
+        const check = mode === "apply"
+          ? "What is the smallest real-world action you can take today based on this module?"
+          : mode === "exam"
+            ? "Write one question and answer that tests the most important concept here."
+            : "Explain the core idea in 4 sentences as if teaching a friend.";
+
+        const rubric = mode === "apply"
+          ? [
+              "Contains at least one concrete action step.",
+              "Mentions constraints/trade-offs (cost, time, risk).",
+              "Includes one example or application case."
+            ]
+          : mode === "exam"
+            ? [
+                "Includes specific facts/definitions (not vague paraphrases).",
+                "Includes at least one question-answer pair.",
+                "Shows distinctions (A vs B) or boundaries of a concept."
+              ]
+            : [
+                "Has a clear main idea + supporting points.",
+                "Includes examples (at least 2).",
+                "Avoids copying: uses your own wording."
+              ];
+
+        const hints = [
+          `Try using these keywords: ${kws.slice(0,6).join(", ") || "—"}`,
+          `Pace hint: allocate ~${Math.max(1, Math.round(paceDays / (modules.length+2)))} day(s) to this step.`
+        ];
+
+        const sourceAnchors = [];
+        if (anchors && anchors.length){
+          // Attempt to find best matching page anchor by keyword overlap
+          let best = {page: 1, score: -1};
+          for (const a of anchors){
+            const aTokens = new Set(tokenize(a.text).slice(0,220));
+            let score = 0;
+            for (const kw of kws) if (aTokens.has(kw)) score++;
+            if (score > best.score) best = {page: a.page, score};
+          }
+          sourceAnchors.push(best.score > 0 ? `Anchor: Page ${best.page} (keyword match)` : `Anchor: Page ${Math.min(stepNum, anchors.length)} (approx)`);
+        }
+
+        steps.push(makeStep({
+          index: steps.length,
+          title: `${stepNum}. ${title}`,
+          objective: obj,
+          task,
+          check,
+          rubric,
+          hints,
+          keywords: kws,
+          sourceAnchors
+        }));
+      });
+
+      steps.push(makeStep({
+        index: steps.length,
+        title: "Synthesis: Build your final brief",
+        objective: "Convert progress into a portable artifact: what you learned, what you can do, and what comes next.",
+        task: mode === "apply"
+          ? "Write a 1-page execution brief: goal, approach, constraints, next actions, and risks."
+          : mode === "exam"
+            ? "Create a revision sheet: top 20 facts + 10 questions + weak areas list."
+            : "Write a 1-page learning brief: thesis, 6 takeaways, 3 examples, and next topics.",
+        check: "What are your top 3 takeaways and your next 2 actions?",
+        rubric: [
+          "Includes a thesis or central idea.",
+          "Lists takeaways (at least 5).",
+          "Includes next steps (at least 2)."
+        ],
+        hints: [
+          "Use a structured format: Thesis → Takeaways → Risks/Confusions → Next Actions."
+        ],
+        sourceAnchors: anchors && anchors.length ? ["Synthesis across all modules."] : []
+      }));
+
+      // Lock all except first
+      steps.forEach((s, i) => {
+        s.status = i === 0 ? "active" : "locked"; // locked|active|done
+        s.userResponse = s.userResponse || "";
+        s.feedback = s.feedback || "";
+        s.score = s.score || 0;
+      });
+
+      return steps;
+    }
+
+    function makeStep({index,title,objective,task,check,rubric,hints,keywords,sourceAnchors}){
+      return {
+        index,
+        title,
+        objective,
+        task,
+        check,
+        rubric: rubric || [],
+        hints: hints || [],
+        keywords: keywords || [],
+        sourceAnchors: sourceAnchors || [],
+        status: "locked",
+        userResponse: "",
+        feedback: "",
+        score: 0
+      };
+    }
+
+    // -------------------- Evaluation gate --------------------
+    function evaluateResponse(step, response){
+      const r = normalizeText(response);
+      if (!r) return {pass:false, score:0, feedback:"Please write a response to continue."};
+
+      const minLen = 80;
+      const wc = r.split(/\s+/).filter(Boolean).length;
+
+      const kws = (step.keywords || []).slice(0,8);
+      const rTokens = new Set(tokenize(r));
+      let overlap = 0;
+      for (const kw of kws){
+        if (rTokens.has(kw)) overlap++;
+      }
+
+      // Structure check (basic)
+      const hasBullets = /(^|\n)\s*[-•]\s+/.test(response);
+      const hasParagraphs = response.split("\n").filter(l=>l.trim()).length >= 2;
+      const structureScore = (hasBullets ? 1 : 0) + (hasParagraphs ? 1 : 0);
+
+      // Build score
+      let score = 0;
+      score += wc >= minLen/5 ? 35 : clamp((wc/(minLen/5))*35, 8, 34); // roughly 16+ words => good
+      score += clamp(overlap * 6, 0, 30);
+      score += structureScore * 10; // up to 20
+      score += (r.length >= minLen ? 15 : 0);
+
+      score = clamp(Math.round(score), 0, 100);
+
+      const pass = score >= 65 || (wc >= 60 && overlap >= 2);
+
+      let feedback = "";
+      if (pass){
+        feedback = `✅ Passed gate. Score ${score}/100.`;
+      } else {
+        const missing = [];
+        if (wc < 60) missing.push("write a bit more detail");
+        if (overlap < 2 && kws.length) missing.push(`use 2–3 keywords: ${kws.slice(0,5).join(", ")}`);
+        if (!hasBullets && !hasParagraphs) missing.push("add structure (bullets or paragraphs)");
+        feedback = `⚠️ Not yet. Score ${score}/100. Improve: ${missing.join(" • ") || "add clarity and examples"}.`;
+      }
+
+      return {pass, score, feedback};
+    }
+
+    // -------------------- Runner UI --------------------
+    function updateProgressUI(){
+      const steps = STATE.steps || [];
+      const done = steps.filter(s=>s.status === "done").length;
+      const total = steps.length;
+
+      $("progressStat").textContent = `${done} / ${total} completed`;
+      const pct = total ? Math.round((done/total)*100) : 0;
+      $("progressFill").style.width = pct + "%";
+    }
+
+    function renderSteps(){
+      const root = $("stepsRoot");
+      const steps = STATE.steps || [];
+
+      if (!steps.length){
+        root.innerHTML = `
+          <div class="step">
+            <h3 class="stepTitle" style="margin:0;color:rgba(255,255,255,.85)">No steps yet</h3>
+            <div class="stepBody">
+              <div class="hint">Upload a PDF or paste text and click <strong>Generate Steps</strong>.</div>
+            </div>
+          </div>
+        `;
+        updateProgressUI();
+        return;
+      }
+
+      const showSources = $("showSources").checked;
+
+      const html = steps.map((s, i) => {
+        const statusChip = s.status === "done"
+          ? `<span class="chip done">done</span>`
+          : s.status === "active"
+            ? `<span class="chip active">active</span>`
+            : `<span class="chip locked">locked</span>`;
+
+        const disabled = s.status !== "active";
+        const btnLabel = s.status === "done" ? "Completed" : "Submit & Unlock Next";
+
+        const sourcesHTML = (showSources && s.sourceAnchors && s.sourceAnchors.length)
+          ? `<div class="block">
+              <h3>Source anchors</h3>
+              <p class="hint">${s.sourceAnchors.map(a=>escapeHTML(a)).join("<br>")}</p>
+            </div>`
+          : "";
+
+        return `
+          <div class="step" style="margin-bottom:12px; opacity:${s.status==="locked" ? ".72":"1"}">
+            <div class="stepHeader">
+              <div>
+                <h3 class="stepTitle">${escapeHTML(s.title)}</h3>
+                <div class="tiny" style="margin-top:6px;color:rgba(255,255,255,.68)">${escapeHTML(s.objective)}</div>
+              </div>
+              <div class="stepMeta">
+                ${statusChip}
+                <span class="chip">${i+1}/${steps.length}</span>
+              </div>
+            </div>
+
+            <div class="stepBody">
+              <div class="block">
+                <h3>Task</h3>
+                <p>${escapeHTML(s.task)}</p>
+              </div>
+
+              <div class="block">
+                <h3>Check</h3>
+                <p>${escapeHTML(s.check)}</p>
+              </div>
+
+              <div class="block">
+                <h3>Rubric</h3>
+                <ul class="rubric">
+                  ${(s.rubric||[]).map(x=>`<li>${escapeHTML(x)}</li>`).join("")}
+                </ul>
+              </div>
+
+              <div class="block">
+                <h3>Your answer</h3>
+                <textarea class="field" style="min-height:110px" ${disabled ? "disabled":""}
+                  placeholder="${disabled ? "This step is locked. Complete the active step first." : "Write your response here…"}"
+                  data-step="${i}"
+                >${escapeHTML(s.userResponse||"")}</textarea>
+
+                <div class="row" style="margin-top:10px">
+                  <button class="btn ${s.status==="done" ? "gray":"green"}" ${disabled ? "disabled style='opacity:.55;cursor:not-allowed'":""}
+                    data-action="submit" data-step="${i}">
+                    ${btnLabel}
+                  </button>
+                  <button class="btn gray" ${disabled ? "disabled style='opacity:.55;cursor:not-allowed'":""}
+                    data-action="skip" data-step="${i}">
+                    Save Draft
+                  </button>
+                </div>
+
+                <div class="tiny" style="margin-top:10px; color:${(s.feedback||"").includes("✅") ? "rgba(0,214,143,.85)" : "rgba(255,255,255,.62)"}">
+                  ${escapeHTML(s.feedback || "")}
+                </div>
+              </div>
+
+              <div class="block">
+                <h3>Hints</h3>
+                <div class="hint">${(s.hints||[]).map(h=>`• ${escapeHTML(h)}`).join("<br>")}</div>
+              </div>
+
+              ${sourcesHTML}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      root.innerHTML = html;
+
+      // hook listeners (event delegation)
+      root.querySelectorAll("textarea[data-step]").forEach(ta=>{
+        ta.addEventListener("input", (e)=>{
+          const idx = parseInt(e.target.getAttribute("data-step"), 10);
+          STATE.steps[idx].userResponse = e.target.value;
+          autosave();
+        });
+      });
+
+      root.querySelectorAll("button[data-action]").forEach(btn=>{
+        btn.addEventListener("click",(e)=>{
+          const idx = parseInt(btn.getAttribute("data-step"), 10);
+          const action = btn.getAttribute("data-action");
+          if (action === "skip"){
+            autosave();
+            toast("Draft saved");
+          } else if (action === "submit"){
+            submitStep(idx);
+          }
+        });
+      });
+
+      updateProgressUI();
+    }
+
+    function submitStep(idx){
+      const steps = STATE.steps;
+      const step = steps[idx];
+      if (!step || step.status !== "active") return;
+
+      const response = step.userResponse || "";
+      const manual = $("manualOverride").checked;
+
+      let pass = false;
+      let score = 0;
+      let feedback = "";
+
+      if (manual){
+        pass = true;
+        score = 100;
+        feedback = "✅ Manually approved (override enabled).";
+      } else {
+        const res = evaluateResponse(step, response);
+        pass = res.pass;
+        score = res.score;
+        feedback = res.feedback;
+      }
+
+      step.score = score;
+      step.feedback = feedback;
+
+      if (pass){
+        step.status = "done";
+        if (steps[idx+1]){
+          steps[idx+1].status = "active";
+          STATE.activeStepIndex = idx+1;
+        } else {
+          STATE.activeStepIndex = steps.length - 1;
+        }
+        toast("Step unlocked ✓");
+      } else {
+        toast("Needs improvement", false);
+      }
+
+      autosave();
+      renderSteps();
+    }
+
+    // -------------------- Export PDFs (jsPDF) --------------------
+    function pdfTricolor(doc, w){
+      // 3 equal bars at top
+      const barH = 10;
+      doc.setFillColor(255,153,51); doc.rect(0,0,w/3,barH,"F");
+      doc.setFillColor(255,255,255); doc.rect(w/3,0,w/3,barH,"F");
+      doc.setFillColor(19,136,8); doc.rect((w/3)*2,0,w/3,barH,"F");
+    }
+
+    function pdfWatermark(doc, w, h, text){
+      doc.saveGraphicsState?.();
+      try{
+        doc.setTextColor(170,170,170);
+        doc.setFont("helvetica","bold");
+        doc.setFontSize(42);
+        // rotate about center
+        doc.text(text, w/2, h/2, { align:"center", angle: -25 });
+      }catch(e){}
+      doc.restoreGraphicsState?.();
+    }
+
+    function safe(text){
+      return normalizeText(text).replace(/[^\x00-\xFF]/g,""); // keep jsPDF happy in some environments
+    }
+
+    function exportPDF(kind){
+      const steps = STATE.steps || [];
+      if (!steps.length){ toast("No steps to export", false); return; }
+
+      const goal = safe(STATE.goal || "—");
+      const mode = safe(STATE.mode || "learn").toUpperCase();
+      const pace = safe(String(STATE.paceDays||14));
+      const sourceName = safe(STATE.source?.name || (STATE.source?.type === "text" ? "Pasted Text" : "—"));
+      const pages = safe(String(STATE.source?.pages || 0));
+
+      const done = steps.filter(s=>s.status==="done").length;
+      const total = steps.length;
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit:"pt", format:"a4" });
+      const w = doc.internal.pageSize.getWidth();
+      const h = doc.internal.pageSize.getHeight();
+      const mg = 44;
+      const cw = w - mg*2;
+
+      const footer = (page, totalPages)=>{
+        doc.setFont("helvetica","normal");
+        doc.setFontSize(9);
+        doc.setTextColor(120,120,120);
+        doc.text(`ViaDecide Step Engine • ${kind.toUpperCase()} • Page ${page}/${totalPages}`, w/2, h-18, { align:"center" });
+      };
+
+      // Build list of included steps:
+      const includeSteps = kind === "completion"
+        ? steps
+        : steps.filter(s=>s.status === "done" || s.status === "active"); // progress: done + current
+
+      // Cover page
+      pdfTricolor(doc, w);
+      pdfWatermark(doc, w, h, "VIADECIDE");
+
+      doc.setFont("helvetica","bold");
+      doc.setTextColor(255,153,51);
+      doc.setFontSize(28);
+      doc.text(kind === "completion" ? "COMPLETION BRIEF" : "PROGRESS BRIEF", mg, 110);
+
+      doc.setFontSize(14);
+      doc.setTextColor(17,24,39);
+      doc.setFont("helvetica","bold");
+      doc.text("ViaDecide — Step Engine", mg, 140);
+
+      doc.setFont("helvetica","normal");
+      doc.setFontSize(11);
+      doc.setTextColor(55,65,81);
+      doc.text(`Mode: ${mode} • Pace: ${pace} days`, mg, 162);
+
+      doc.setDrawColor(230,230,230);
+      doc.setLineWidth(1);
+      doc.line(mg, 176, w-mg, 176);
+
+      doc.setFont("helvetica","bold");
+      doc.setTextColor(17,24,39);
+      doc.text("Goal", mg, 205);
+      doc.setFont("helvetica","normal");
+      doc.setTextColor(55,65,81);
+      const goalLines = doc.splitTextToSize(goal || "—", cw);
+      doc.text(goalLines, mg, 224);
+
+      let y = 224 + goalLines.length * 14 + 10;
+
+      doc.setFont("helvetica","bold");
+      doc.setTextColor(17,24,39);
+      doc.text("Source", mg, y);
+      doc.setFont("helvetica","normal");
+      doc.setTextColor(55,65,81);
+      doc.text(`Material: ${sourceName} ${STATE.source?.type === "pdf" ? `(pages: ${pages})` : ""}`, mg, y+18);
+
+      y += 44;
+
+      doc.setFont("helvetica","bold");
+      doc.setTextColor(17,24,39);
+      doc.text("Progress", mg, y);
+      doc.setFont("helvetica","normal");
+      doc.setTextColor(55,65,81);
+      doc.text(`Completed: ${done}/${total}`, mg, y+18);
+
+      // progress bar
+      const barW = 260, barH = 10;
+      const pct = total ? done/total : 0;
+      doc.setFillColor(236,236,236);
+      doc.roundedRect(mg, y+28, barW, barH, 6, 6, "F");
+      doc.setFillColor(0,214,143);
+      doc.roundedRect(mg, y+28, Math.max(8, barW*pct), barH, 6, 6, "F");
+
+      y += 72;
+
+      doc.setFont("helvetica","bold");
+      doc.setTextColor(17,24,39);
+      doc.text("Index (included steps)", mg, y);
+
+      y += 18;
+
+      doc.setFont("helvetica","normal");
+      doc.setFontSize(10.5);
+      doc.setTextColor(55,65,81);
+      includeSteps.forEach((s, i)=>{
+        const line = `${i+1}. ${safe(s.title)}  [${(s.status||"").toUpperCase()}]`;
+        const lines = doc.splitTextToSize(line, cw);
+        for (const l of lines){
+          if (y > h-60){ doc.addPage(); pdfTricolor(doc,w); y = 70; }
+          doc.text(l, mg, y);
+          y += 14;
+        }
+      });
+
+      // Step pages
+      const pagesOut = [];
+      // We'll add pages and then finalize footers at end by tracking total pages:
+      // Easiest: build, then add footer at end using internal getNumberOfPages
+      for (const s of includeSteps){
+        doc.addPage();
+        pdfTricolor(doc, w);
+        pdfWatermark(doc, w, h, "VIADECIDE");
+
+        let yy = 70;
+
+        doc.setFont("helvetica","bold");
+        doc.setFontSize(18);
+        doc.setTextColor(255,153,51);
+        doc.text(safe(s.title), mg, yy);
+        yy += 18;
+
+        doc.setFont("helvetica","normal");
+        doc.setFontSize(10.8);
+        doc.setTextColor(55,65,81);
+        doc.text(`Status: ${(s.status||"").toUpperCase()} • Score: ${Math.round(s.score||0)}/100`, mg, yy);
+        yy += 18;
+
+        // Objective / Task / Check
+        const blocks = [
+          ["Objective", s.objective],
+          ["Task", s.task],
+          ["Check", s.check]
+        ];
+
+        for (const [label, content] of blocks){
+          doc.setFont("helvetica","bold");
+          doc.setTextColor(17,24,39);
+          doc.text(label, mg, yy);
+          yy += 14;
+          doc.setFont("helvetica","normal");
+          doc.setTextColor(55,65,81);
+          const lines = doc.splitTextToSize(safe(content||"—"), cw);
+          for (const l of lines){
+            if (yy > h-70){ doc.addPage(); pdfTricolor(doc,w); pdfWatermark(doc,w,h,"VIADECIDE"); yy=70; }
+            doc.text(l, mg, yy);
+            yy += 14;
+          }
+          yy += 10;
+        }
+
+        // Rubric
+        doc.setFont("helvetica","bold");
+        doc.setTextColor(17,24,39);
+        doc.text("Rubric", mg, yy);
+        yy += 14;
+
+        doc.setFont("helvetica","normal");
+        doc.setTextColor(55,65,81);
+        const rubric = (s.rubric||[]).slice(0,10);
+        if (rubric.length){
+          for (const item of rubric){
+            const lines = doc.splitTextToSize("• " + safe(item), cw);
+            for (const l of lines){
+              if (yy > h-70){ doc.addPage(); pdfTricolor(doc,w); pdfWatermark(doc,w,h,"VIADECIDE"); yy=70; }
+              doc.text(l, mg, yy);
+              yy += 14;
+            }
+          }
+        } else {
+          doc.text("—", mg, yy);
+          yy += 14;
+        }
+        yy += 10;
+
+        // User response (trim big)
+        doc.setFont("helvetica","bold");
+        doc.setTextColor(17,24,39);
+        doc.text("User response", mg, yy);
+        yy += 14;
+
+        doc.setFont("helvetica","normal");
+        doc.setTextColor(55,65,81);
+        let resp = safe(s.userResponse||"");
+        if (resp.length > 2600) resp = resp.slice(0,2600) + "…";
+        const respLines = doc.splitTextToSize(resp || "—", cw);
+        for (const l of respLines){
+          if (yy > h-70){ doc.addPage(); pdfTricolor(doc,w); pdfWatermark(doc,w,h,"VIADECIDE"); yy=70; }
+          doc.text(l, mg, yy);
+          yy += 14;
+        }
+        yy += 10;
+
+        // Feedback
+        doc.setFont("helvetica","bold");
+        doc.setTextColor(17,24,39);
+        doc.text("Feedback", mg, yy);
+        yy += 14;
+
+        doc.setFont("helvetica","normal");
+        doc.setTextColor(55,65,81);
+        const fbLines = doc.splitTextToSize(safe(s.feedback||"—"), cw);
+        for (const l of fbLines){
+          if (yy > h-70){ doc.addPage(); pdfTricolor(doc,w); pdfWatermark(doc,w,h,"VIADECIDE"); yy=70; }
+          doc.text(l, mg, yy);
+          yy += 14;
+        }
+
+        // Anchors
+        const showSources = $("showSources").checked;
+        if (showSources && s.sourceAnchors && s.sourceAnchors.length){
+          yy += 12;
+          doc.setDrawColor(220,220,220);
+          doc.line(mg, yy, w-mg, yy);
+          yy += 16;
+          doc.setFont("helvetica","bold");
+          doc.setTextColor(17,24,39);
+          doc.text("Source anchors", mg, yy);
+          yy += 14;
+          doc.setFont("helvetica","normal");
+          doc.setTextColor(55,65,81);
+          for (const a of s.sourceAnchors.slice(0,6)){
+            const aLines = doc.splitTextToSize("• " + safe(a), cw);
+            for (const l of aLines){
+              if (yy > h-70){ doc.addPage(); pdfTricolor(doc,w); pdfWatermark(doc,w,h,"VIADECIDE"); yy=70; }
+              doc.text(l, mg, yy);
+              yy += 14;
+            }
+          }
+        }
+      }
+
+      // Add footers on all pages
+      const totalPages = doc.getNumberOfPages();
+      for (let p=1; p<=totalPages; p++){
+        doc.setPage(p);
+        footer(p, totalPages);
+      }
+
+      const date = new Date().toISOString().slice(0,10);
+      const filename = kind === "completion"
+        ? `ViaDecide_Completion_Brief_${date}.pdf`
+        : `ViaDecide_Progress_Brief_${date}.pdf`;
+
+      doc.save(filename);
+      toast("PDF exported ✓");
+    }
+
+    // -------------------- Actions --------------------
+    async function generate(){
+      const goal = $("goal").value.trim();
+      const mode = $("mode").value;
+      const paceDays = parseInt($("pace").value, 10) || 14;
+
+      STATE.goal = goal;
+      STATE.mode = mode;
+      STATE.paceDays = paceDays;
+
+      const pdfFile = $("pdfFile").files?.[0] || null;
+      const pasted = $("pasteText").value;
+
+      if (!pdfFile && !normalizeText(pasted)){
+        toast("Add a PDF or paste text first", false);
+        return;
+      }
+
+      toast("Generating steps…");
+
+      let rawText = "";
+      let anchors = [];
+      let pages = 0;
+
+      if (pdfFile){
+        try{
+          const res = await extractTextFromPDF(pdfFile);
+          rawText = res.text;
+          anchors = res.anchors;
+          pages = res.pages;
+          STATE.source = { type:"pdf", name: pdfFile.name, pages, anchors: anchors.map(a=>({page:a.page, text:""})) };
+          // keep anchors small in state: only page numbers
+          // (text already in rawText; we avoid huge storage)
+        }catch(e){
+          console.error(e);
+          toast("PDF read failed. Try another PDF.", false);
+          return;
+        }
+      } else {
+        rawText = normalizeText(pasted);
+        STATE.source = { type:"text", name:"Pasted Text", pages:0, anchors:[] };
+      }
+
+      // Keep rawText in state (cap to avoid storage overflow)
+      const cap = 450000; // ~450k chars
+      STATE.rawText = rawText.length > cap ? rawText.slice(0,cap) : rawText;
+
+      // For step generation, pass anchor texts only if PDF, but cap anchor content
+      let anchorForGen = [];
+      if (pdfFile){
+        // regenerate small anchors by splitting STATE.rawText by [Page X] markers (approx)
+        // We already extracted in-memory, but we can re-use quick anchors using markers:
+        // However, we already have anchors from extraction; best: re-read anchors from extraction result.
+        // We'll store only page numbers; so for generation, we rebuild simplistic anchors from rawText chunks.
+        anchorForGen = rebuildAnchorsFromMarker(STATE.rawText, pages);
+      }
+
+      const steps = generateStepsFromText(
+        STATE.rawText,
+        anchorForGen,
+        { mode, paceDays, pages }
+      );
+
+      STATE.steps = steps;
+      STATE.activeStepIndex = 0;
+
+      if (!STATE.projectId){
+        STATE.projectId = uid();
+        STATE.createdAt = nowISO();
+      }
+      autosave();
+      renderSteps();
+      toast("Steps generated ✓");
+    }
+
+    function rebuildAnchorsFromMarker(text, pages){
+      // Build approximate anchors by locating "[Page X]" sections
+      const anchors = [];
+      if (!pages) return anchors;
+      const parts = text.split(/\[Page\s+\d+\]/g);
+      // parts[0] is preface; subsequent correspond to pages (roughly)
+      for (let p=1;p<=pages;p++){
+        const chunk = normalizeText(parts[p] || "");
+        anchors.push({ page:p, text: chunk.slice(0, 6000) });
+      }
+      return anchors;
+    }
+
+    function clearAll(){
+      $("pdfFile").value = "";
+      $("pasteText").value = "";
+      $("goal").value = "";
+      $("mode").value = "learn";
+      $("pace").value = "14";
+      STATE = {
+        projectId: null,
+        createdAt: null,
+        updatedAt: null,
+        goal: "",
+        mode: "learn",
+        paceDays: 14,
+        source: { type:"none", name:"", pages:0, anchors:[] },
+        rawText: "",
+        steps: [],
+        activeStepIndex: 0
+      };
+      autosave();
+      renderSteps();
+      updateStorageMeta();
+      toast("Cleared");
+    }
+
+    function escapeHTML(str){
+      return (str ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#39;");
+    }
+
+    // -------------------- Wire up --------------------
+    $("btnGenerate").addEventListener("click", generate);
+    $("btnClear").addEventListener("click", clearAll);
+
+    $("btnExportProgress").addEventListener("click", ()=>exportPDF("progress"));
+    $("btnExportComplete").addEventListener("click", ()=>exportPDF("completion"));
+
+    $("btnSave").addEventListener("click", ()=>{
+      autosave();
+      toast("Saved ✓");
+    });
+
+    $("btnLoad").addEventListener("click", ()=>{
+      const ok = loadSaved();
+      toast(ok ? "Loaded ✓" : "No saved project", ok);
+    });
+
+    $("btnWipe").addEventListener("click", ()=>{
+      if (confirm("Wipe saved project from this device?")){
+        wipeSaved();
+      }
+    });
+
+    // keep state synced with inputs
+    $("goal").addEventListener("input", (e)=>{ STATE.goal = e.target.value; autosave(); });
+    $("mode").addEventListener("change", (e)=>{ STATE.mode = e.target.value; autosave(); });
+    $("pace").addEventListener("change", (e)=>{ STATE.paceDays = parseInt(e.target.value,10)||14; autosave(); });
+    $("showSources").addEventListener("change", ()=>renderSteps());
+
+    // Boot
+    (function boot(){
+      const ok = loadSaved();
+      renderSteps();
+      updateProgressUI();
+      updateStorageMeta();
+      if (ok) toast("Restored last session ✓");
+    })();
+  </script>
+</body>
+</html>
